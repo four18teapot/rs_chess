@@ -45,6 +45,8 @@ const BOARD_START: [Piece; 120] =
      13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
      13, 13, 13, 13, 13, 13, 13, 13, 13, 13];
 
+const KNIGHT_OFFSETS: [i64; 8] = [-19, -21, -12, 8, 19, 21, -8, 12];
+
 /// Represents a chess gamestate, along with usefull functions and fields for move generation and state evaluation.
 #[derive(Copy, Clone)]
 pub struct Board {
@@ -54,7 +56,7 @@ pub struct Board {
     castle: [bool; 4],
     /// The side to make a move. Equal to 1 if white and -1 if black.
     side: i8,
-333    /// Number of half-moves allready played.
+    /// Number of half-moves allready played.
     moves: u16,
     /// Array of the history of [Zorbist Hashes](https://en.wikipedia.org/wiki/Zobrist_hashing) the game has been in. Used for efficient evaluation and detecting three-fold repitition.
     key_history: [u64; 2048],
@@ -71,6 +73,7 @@ pub struct Board {
 }
 
 impl Board {
+    /// A standard chess starting position.
     pub fn new_starting() -> Board {
 	Board {
 	    board: BOARD_START,
@@ -96,6 +99,32 @@ impl Board {
 			[25,  0, 0, 0, 0, 0, 0, 0, 0, 0]],		
 	}
     }
+
+    pub fn pseudo_legal_moves(&self) -> Vec<Move> {
+	let mut moves = Vec::new();
+    }
+}
+
+/// Return the type of a piece. (1 = White, -1 = Black, 0 = Empty, 2 = Offboard)
+fn piece_type(p: &Piece) -> i8 {
+    return if piece < 6 { 1 } else if piece < 12 { -1 } else if piece == 12 { 0 } else { 2 };
+}
+
+fn psuedo_legal_knight(board: &Board) -> Vec<Move> {
+    let mut moves = Vec::new();
+    let piece = if board.side == 1 { 2 } else { 8 };
+    for piece_n in 0..board.piece_count[piece] {
+	let square = board.piece_pos[piece_n];
+	for offset in KNIGHT_OFFSETS {
+	    let p_type = piece_type(board.board[(square + offset) as Square]);
+	    if p_type == board.side || p_type == 2 {
+		continue;
+	    } else {
+		moves.push(Move::Normal(square, square + offset));
+	    }
+	}
+    }
+    return moves;
 }
 
 impl fmt::Display for Board {
@@ -128,7 +157,7 @@ impl fmt::Display for Board {
 	str_board.push_str(match self.side {
 	    1  => "Side: White\n",
 	    -1 => "Side: Black\n",
-3	    _  => unreachable!(),
+	    _  => unreachable!(),
 	});
 
 	let str_mov_count = format!("Move Count: {}\n", self.moves);
@@ -143,14 +172,15 @@ impl fmt::Display for Board {
 enum Move {
     /// Is not a move, used for storing moves in arrays.
     NoMove,
-    /// (from, to, is_capture)
-    Normal(Square, Square, bool),
+    /// (from, to)
+    Normal(Square, Square),
     /// (from, to)
     DoublePawn(Square, Square),
     /// (from, to) 
     EnPassant(Square, Square),
-    /// (from, to, piece, is_capture)
-    Promotion(Square, Square, u8, bool),
+    /// (from, to, piece)
+    Promotion(Square, Square, u8),
     /// (type of castle) [0 - WhiteKing, 1 - WhiteQueen, 2 - BlackKing, 3 - BlackQueen] 
     Castle(usize),
 }
+
