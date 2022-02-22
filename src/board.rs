@@ -12,16 +12,16 @@ Pieces are represented by a u8.
 7 -   "   Rook
 8 -   "   Knight
 9 -   "   Bishop
-10-   "   Queen
+v10-   "   Queen
 11-   "   King
 12- Empty
 13- Offboard
 */
 
-type Square = usize;
-type Piece = u8;
+pub type Square = usize;
+pub type Piece = u8;
 
-const BOARD64: [Square; 64] =
+pub const BOARD64: [Square; 64] =
     [21, 22, 23, 24, 25, 26, 27, 28,
      31, 32, 33, 34, 35, 36, 37, 38,
      41, 42, 43, 44, 45, 46, 47, 48,
@@ -31,7 +31,22 @@ const BOARD64: [Square; 64] =
      81, 82, 83, 84, 85, 86, 87, 88,
      91, 92, 93, 94, 95, 96, 97, 98];
 
-const BOARD_START: [Piece; 120] = 
+pub const BOARD120: [Square; 120] =
+    [usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX,
+     usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX,
+     usize::MAX,  0,  1,  2,  3,  4,  5,  6,  7, usize::MAX,
+     usize::MAX,  8,  9, 10, 11, 12, 13, 14, 15, usize::MAX,
+     usize::MAX, 16, 17, 18, 19, 20, 21, 22, 23, usize::MAX,
+     usize::MAX, 24, 25, 26, 27, 28, 29, 30, 31, usize::MAX,
+     usize::MAX, 32, 33, 34, 35, 36, 37, 38, 39, usize::MAX,
+     usize::MAX, 40, 41, 42, 43, 44, 45, 46, 47, usize::MAX,
+     usize::MAX, 48, 49, 50, 51, 52, 53, 54, 55, usize::MAX,
+     usize::MAX, 56, 57, 58, 59, 60, 61, 62, 63, usize::MAX,
+     usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX,
+     usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX, usize::MAX];
+    
+
+pub const BOARD_START: [Piece; 120] = 
     [13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
      13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
      13,  7,  8,  9, 10, 11,  9,  8,  7, 13,
@@ -44,6 +59,21 @@ const BOARD_START: [Piece; 120] =
      13,  1,  2,  3,  4,  5,  3,  2,  1, 13,
      13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
      13, 13, 13, 13, 13, 13, 13, 13, 13, 13];
+
+pub const BOARD_EMPTY: [Piece; 120] =
+    [13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+     13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+     13, 13, 13, 13, 13, 13, 13, 13, 13, 13,
+     13, 13, 13, 13, 13, 13, 13, 13, 13, 13];
+     
 
 const KNIGHT_OFFSETS: [i64; 8] = [-19, -21, -12, 8, 19, 21, -8, 12];
 
@@ -100,31 +130,94 @@ impl Board {
 	}
     }
 
-    pub fn pseudo_legal_moves(&self) -> Vec<Move> {
-	let mut moves = Vec::new();
-    }
-}
+    /// Board struct from [Forsyth-Edwards-Notation](https://de.wikipedia.org/wiki/Forsyth-Edwards-Notation).
+    pub fn from_fen(fen: &str) -> Option<Board> {
+	let fen_byte = fen.as_bytes();
 
-/// Return the type of a piece. (1 = White, -1 = Black, 0 = Empty, 2 = Offboard)
-fn piece_type(p: &Piece) -> i8 {
-    return if piece < 6 { 1 } else if piece < 12 { -1 } else if piece == 12 { 0 } else { 2 };
-}
+	
+	let mut board = BOARD_EMPTY;
+	let mut piece_count = [0; 12];
+	let mut piece_pos = [[0; 10]; 12];
+	let mut en_passant: Option<Square> = None;
+	let mut side = 0;
+	let mut moves = 0;
+	let mut fifty_moves = 0;
+	let mut key_history = [0; 2048];
+	let mut move_history = [Move::NoMove; 2048];
+	let mut castle = [false; 4];
 
-fn psuedo_legal_knight(board: &Board) -> Vec<Move> {
-    let mut moves = Vec::new();
-    let piece = if board.side == 1 { 2 } else { 8 };
-    for piece_n in 0..board.piece_count[piece] {
-	let square = board.piece_pos[piece_n];
-	for offset in KNIGHT_OFFSETS {
-	    let p_type = piece_type(board.board[(square + offset) as Square]);
-	    if p_type == board.side || p_type == 2 {
-		continue;
-	    } else {
-		moves.push(Move::Normal(square, square + offset));
+	let mut square: Square = 0;
+	let mut byte_idx = 0;
+	loop {
+	    if square == 64 {
+		break;
+	    } else if square > 64 {
+		return None;
 	    }
+
+	    let token = match fen_byte.get(byte_idx) {
+		None => return None,
+		Some(a) => a,
+	    };
+	    
+	    if *token == b'/' {
+		if square % 8 != 7 {
+		    return None;
+		}
+	    } else if *token > 47 && *token < 58 {
+		square += (token - 48) as usize;
+	    } else {
+		let piece = match fen_byte.get(byte_idx) {
+		    Some(b'P') => 0,
+		    Some(b'R') => 1,
+		    Some(b'N') => 2,
+		    Some(b'B') => 3,
+		    Some(b'Q') => 4,
+		    Some(b'K') => 5,
+		    Some(b'p') => 6,
+		    Some(b'r') => 7,
+		    Some(b'n') => 8,
+		    Some(b'b') => 9,
+		    Some(b'q') => 10,
+		    Some(b'k') => 11,
+		    _ => return None,
+		};
+		let real_sq = BOARD64[square];
+		piece_pos[piece][piece_count[piece]] = real_sq;
+		piece_count[piece] += 1;
+		square += 1;
+	    }
+	    byte_idx += 1;
 	}
+
+	byte_idx += 1;
+	side = match fen_byte.get(byte_idx) {
+	    Some(b'w') => 1,
+	    Some(b'b') => -1,
+	    _ => return None,
+	};
+
+	byte_idx += 1;
+	loop {
+	    castle[match fen_byte.get(byte_idx) {
+		Some(b'K') => 0,
+		Some(b'Q') => 1,
+		Some(b'k') => 2,
+		Some(b'q') => 3,
+		Some(b' ') => break,
+		_ => return None,
+	    }] = true;
+	    byte_idx += 1;
+	}
+
+	byte_idx += 1;
+	todo!();
     }
-    return moves;
+
+    pub fn pseudo_legal_moves(&self) -> Vec<Move> {
+	let mut moves: Vec<Move> = Vec::new();
+	todo!();
+    }
 }
 
 impl fmt::Display for Board {
@@ -184,3 +277,11 @@ enum Move {
     Castle(usize),
 }
 
+/// Return the type of a piece. (1 = White, -1 = Black, 0 = Empty, 2 = Offboard)
+fn piece_type(piece: Piece) -> i8 {
+    return if piece < 6 { 1 } else if piece < 12 { -1 } else if piece == 12 { 0 } else { 2 };
+}
+
+fn algebraic_to_square(alg: &str) -> Option<Square> {
+    todo!();
+}

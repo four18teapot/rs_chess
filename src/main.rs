@@ -1,4 +1,5 @@
 mod board;
+mod hasher;
 
 use board::Board;
 
